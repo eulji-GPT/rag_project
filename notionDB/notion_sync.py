@@ -3,6 +3,7 @@ from notion_client import Client
 from sentence_transformers import SentenceTransformer
 import chromadb
 from chromadb.config import Settings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from notion_config import NOTION_TOKEN, DATABASE_ID
 
 # 🔧 초기 설정
@@ -33,6 +34,7 @@ def fetch_page_content(page_id):
 
 # ✅ Notion DB → ChromaDB 동기화 함수
 def sync_notion_to_chroma():
+    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
     pages = notion.databases.query(database_id=DATABASE_ID)["results"]
     print(f"🔄 총 {len(pages)}개의 페이지를 동기화합니다.")
 
@@ -41,20 +43,20 @@ def sync_notion_to_chroma():
         content = fetch_page_content(page["id"])
         full_text = f"제목: {title}\n내용:\n{content}"
 
-        embedding = embed_model.encode([full_text]).tolist()
-        doc_id = f"notion_{page['id'].replace('-', '')}"
+        chunks = splitter.split_text(full_text)
 
-        # 중복 방지: 이미 존재하는 ID는 생략
-        try:
-            collection.add(
-                documents=[full_text],
-                embeddings=embedding,
-                ids=[doc_id],
-                metadatas=[{"title": title}]
-            )
-            print(f"✅ [{idx+1}] '{title}' 추가됨")
-        except chromadb.errors.IDAlreadyExistsError:
-            print(f"⚠️  [{idx+1}] '{title}' 이미 존재하여 생략됨")
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"notion_{page['id'].replace('-', '')}_{i}"
+            try:
+                collection.add(
+                    documents=[chunk],
+                    embeddings=embed_model.encode([chunk]).tolist(),
+                    ids=[chunk_id],
+                    metadatas=[{"title": title, "chunk_index": i}]
+                )
+                print(f"✅ [{idx+1}-{i}] '{title}' chunk {i} 추가됨")
+            except chromadb.errors.IDAlreadyExistsError:
+                print(f"⚠️  [{idx+1}-{i}] '{title}' chunk {i} 이미 존재하여 생략됨")
 
 if __name__ == "__main__":
     sync_notion_to_chroma()

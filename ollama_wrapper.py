@@ -1,29 +1,27 @@
 # ollama_wrapper.py
 import ollama
 
-# 문서들과 질문을 묶어 LLM에 전달
-def get_ollama_answer(query: str, context_docs: list[str], stream: bool = True) -> str:
-    prompt = f"""다음 정보를 참고하여 질문에 답변해 주세요.
+# 🔧 RAG 프롬프트 생성 함수
+def build_rag_prompt(query: str, chunks: list[str], metadatas: list[dict]) -> str:
+    prompt = "당신은 정보를 요약해서 질문에 정확히 답변하는 AI 비서입니다.\n\n"
+    for i, chunk in enumerate(chunks):
+        title = metadatas[i].get("title", "알 수 없는 문서")
+        prompt += f"[문서 제목: {title}]\n내용:\n{chunk.strip()}\n\n---\n\n"
+    prompt += f"질문: {query}\n답변:"
+    return prompt
 
-[참고 문서]
-{chr(10).join(context_docs)}
-
-[질문]
-{query}
-
-[답변]
-"""
-
+# 🔄 Ollama 호출 함수
+def get_ollama_answer(query: str, context_chunks: list[str], metadatas: list[dict], stream: bool = True) -> str:
+    prompt = build_rag_prompt(query, context_chunks, metadatas)
     messages = [{"role": "user", "content": prompt}]
 
     if stream:
-        # 실시간 스트리밍 응답
+        print("\n💬 AI 응답:")
         response = ollama.chat(model="exaone3.5:7.8b", messages=messages, stream=True)
-        print("💬 답변:")
         for chunk in response:
             print(chunk["message"]["content"], end="", flush=True)
+        print("\n")
         return ""
     else:
-        # 한번에 응답
         response = ollama.chat(model="exaone3.5:7.8b", messages=messages)
         return response["message"]["content"]

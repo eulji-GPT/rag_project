@@ -16,4 +16,5 @@ def search_docs(query: str, k: int = 3):
     query_embedding = EMBED_MODEL.encode([query]).tolist()
     results = collection.query(query_embeddings=query_embedding, n_results=k)
 
-    return results["documents"][0]  # 리스트 반환
+    return results["documents"][0], results["metadatas"][0]
+
